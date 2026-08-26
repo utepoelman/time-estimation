@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Time Estimation Experiment</title>
+<style>
+  :root {
+    --bg-color: #ffffff;
+    --text-color: #000000;
+    --button-bg: #eeeeee;
+    --button-border: #999999;
+  }
+  body {
+    background-color: var(--bg-color);
+    color: var(--text-color);
+    font-family: sans-serif;
+    margin: 0;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-height: 100vh;
+    box-sizing: border-box;
+  }
+  .hidden { display: none !important; }
+  
+  #setup-panel {
+    width: 100%;
+    max-width: 750px;
+    border: 1px solid var(--button-border);
+    padding: 20px;
+    box-sizing: border-box;
+    background-color: var(--button-bg);
+  }
+  .form-group {
+    margin-bottom: 15px;
+    display: flex;
+    flex-direction: column;
+  }
+  .form-row {
+    display: flex;
+    gap: 15px;
+  }
+  /* Ensures inputs sit at the bottom baseline regardless of label line wraps */
+  .form-row .form-group {
+    flex: 1;
+    justify-content: space-between;
+  }
+  label {
+    font-weight: bold;
+    margin-bottom: 5px;
+    font-size: 14px;
+  }
+  input, select, button {
+    padding: 8px;
+    font-family: inherit;
+    font-size: 14px;
+    border: 1px solid var(--button-border);
+  }
+  .form-group input,
+  .form-group select {
+    width: 100%;
+    box-sizing: border-box;
+  }
+  button {
+    cursor: pointer;
+    background-color: var(--text-color);
+    color: var(--bg-color);
+    font-weight: bold;
+    border: none;
+    padding: 10px 15px;
+  }
+
+  #stage-box {
+    width: 100%;
+    max-width: 900px;
+    height: 500px;
+    border: 2px solid var(--button-border);
+    position: relative;
+    box-sizing: border-box;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+  }
+  
+  #results-stage {
+    width: 100%;
+    max-width: 750px;
+    margin-top: 20px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .button-group {
+    display: flex;
+    gap: 15px;
+    margin-top: 20px;
+  }
+
+  /* Results Table Styling */
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 15px;
+  }
+  th, td {
+    border: 1px solid var(--button-border);
+    padding: 8px 12px;
+    text-align: center;
+  }
+  th {
+    background-color: var(--button-bg);
+  }
+</style>
+</head>
+<body>
+
+<!-- SETUP PANEL -->
+<div id="setup-panel">
+  <h2>Time Estimation Setup</h2>
+  
+  <div class="form-row">
+    <div class="form-group">
+      <label for="target-time">Target Time (seconds):</label>
+      <input type="number" id="target-time" value="20" min="1" step="0.5">
+    </div>
+    <div class="form-group">
+      <label for="est-trials">Number of Trials:</label>
+      <input type="number" id="est-trials" value="3" min="1" step="1">
+    </div>
+    <div class="form-group">
+      <label for="show-feedback">Trial Feedback:</label>
+      <select id="show-feedback">
+        <option value="true">Enabled (Show error)</option>
+        <option value="false">Disabled (No feedback)</option>
+      </select>
+    </div>
+  </div>
+
+  <button id="btn-start" style="margin-top: 15px;">Start Experiment</button>
+</div>
+
+<!-- MAIN STAGE BOX -->
+<div id="stage-box" class="hidden"></div>
+
+<!-- RESULTS STAGE -->
+<div id="results-stage" class="hidden">
+  <h2>Results</h2>
+  <div id="results-content"></div>
+  <div class="button-group">
+    <button id="btn-next-participant">Next Participant</button>
+    <button id="btn-modify-setup">Modify Setup</button>
+  </div>
+</div>
+
+<script>
+// State Management
+let experimentConfig = {};
+let spaceState = 'IDLE'; // IDLE, ESTIMATION_READY, ESTIMATION_RUNNING, TRIAL_FEEDBACK
+
+let currentTrial = 0;
+let totalTrials = 0;
+let estimationStartTime = 0;
+let trialResults = [];
+
+const setupPanel = document.getElementById('setup-panel');
+const stageBox = document.getElementById('stage-box');
+const resultsStage = document.getElementById('results-stage');
+
+// Start Experiment (Experimenter Step)
+document.getElementById('btn-start').addEventListener('click', () => {
+  const trialInputVal = parseInt(document.getElementById('est-trials').value, 10);
+  
+  if (isNaN(trialInputVal) || trialInputVal < 1) {
+    alert("Please enter a valid number of trials (at least 1).");
+    return;
+  }
+
+  experimentConfig = {
+    targetTime: parseFloat(document.getElementById('target-time').value),
+    trials: trialInputVal,
+    showFeedback: document.getElementById('show-feedback').value === 'true'
+  };
+
+  setupPanel.classList.add('hidden');
+  prepareParticipantLobby();
+});
+
+function prepareParticipantLobby() {
+  resultsStage.classList.add('hidden');
+  stageBox.classList.remove('hidden');
+  stageBox.style.backgroundColor = '#ffffff';
+  stageBox.style.color = '#000000';
+  stageBox.style.fontFamily = 'sans-serif';
+  stageBox.style.fontSize = '20px';
+
+  currentTrial = 0;
+  trialResults = [];
+  totalTrials = experimentConfig.trials;
+  stageBox.innerHTML = `
+    <h2>Time Estimation Task</h2>
+    <p>Target Duration: <strong>${experimentConfig.targetTime} seconds</strong></p>
+    <p style="margin-top: 30px;">Press <strong>SPACEBAR</strong> to start Trial 1 of ${totalTrials}.</p>
+  `;
+  spaceState = 'ESTIMATION_READY';
+}
+
+// Universal Spacebar Handler
+window.addEventListener('keydown', (e) => {
+  if (e.code === 'Space' || e.key === ' ') {
+    if (['ESTIMATION_READY', 'ESTIMATION_RUNNING', 'TRIAL_FEEDBACK'].includes(spaceState)) {
+      e.preventDefault();
+    }
+
+    if (spaceState === 'ESTIMATION_READY') {
+      startEstimationTrial();
+    } else if (spaceState === 'ESTIMATION_RUNNING') {
+      stopEstimationTrial();
+    } else if (spaceState === 'TRIAL_FEEDBACK') {
+      nextEstimationTrial();
+    }
+  }
+});
+
+function startEstimationTrial() {
+  currentTrial++;
+  spaceState = 'ESTIMATION_RUNNING';
+  estimationStartTime = performance.now();
+  stageBox.innerHTML = `
+    <h2>Target Time: ${experimentConfig.targetTime}s</h2>
+    <p style="margin-top: 20px;">Timer running...</p>
+    <p style="margin-top: 30px;">Press <strong>SPACEBAR</strong> to stop.</p>
+  `;
+}
+
+function stopEstimationTrial() {
+  const elapsedTime = (performance.now() - estimationStartTime) / 1000;
+  const diff = elapsedTime - experimentConfig.targetTime;
+
+  trialResults.push({
+    trial: currentTrial,
+    target: experimentConfig.targetTime,
+    actual: elapsedTime,
+    diff: diff
+  });
+
+  if (experimentConfig.showFeedback) {
+    spaceState = 'TRIAL_FEEDBACK';
+    const direction = diff > 0 ? 'too long' : 'too short';
+    const absDiff = Math.abs(diff).toFixed(2);
+    
+    stageBox.innerHTML = `
+      <h2>Trial ${currentTrial} Feedback</h2>
+      <p style="font-size: 24px; margin: 15px 0;">Time elapsed: <strong>${elapsedTime.toFixed(2)}s</strong></p>
+      <p style="font-size: 20px; color: ${diff > 0 ? '#b30000' : '#0055b3'};">
+        That was <strong>${absDiff}s ${direction}</strong>.
+      </p>
+      <p style="margin-top: 30px;">Press <strong>SPACEBAR</strong> to ${currentTrial < totalTrials ? 'continue' : 'view final results'}.</p>
+    `;
+  } else {
+    nextEstimationTrial();
+  }
+}
+
+function nextEstimationTrial() {
+  if (currentTrial < totalTrials) {
+    spaceState = 'ESTIMATION_READY';
+    stageBox.innerHTML = `
+      <h2>Time Estimation Task</h2>
+      <p>Target Duration: <strong>${experimentConfig.targetTime} seconds</strong></p>
+      <p style="margin-top: 30px;">Press <strong>SPACEBAR</strong> to start Trial ${currentTrial + 1} of ${totalTrials}.</p>
+    `;
+  } else {
+    finishEstimationExperiment();
+  }
+}
+
+function finishEstimationExperiment() {
+  stageBox.classList.add('hidden');
+  resultsStage.classList.remove('hidden');
+  spaceState = 'IDLE';
+
+  const resultsContent = document.getElementById('results-content');
+  
+  let rows = trialResults.map(r => `
+    <tr>
+      <td>${r.trial}</td>
+      <td>${r.target.toFixed(2)}s</td>
+      <td>${r.actual.toFixed(2)}s</td>
+      <td>${r.diff > 0 ? '+' : ''}${r.diff.toFixed(2)}s</td>
+    </tr>
+  `).join('');
+
+  resultsContent.innerHTML = `
+    <p>Target Duration: <strong>${experimentConfig.targetTime} seconds</strong></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Trial</th>
+          <th>Target</th>
+          <th>Recorded Time</th>
+          <th>Difference</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${rows}
+      </tbody>
+    </table>
+  `;
+}
+
+// Reset Handlers
+document.getElementById('btn-next-participant').addEventListener('click', () => {
+  prepareParticipantLobby();
+});
+
+document.getElementById('btn-modify-setup').addEventListener('click', () => {
+  resultsStage.classList.add('hidden');
+  stageBox.classList.add('hidden');
+  setupPanel.classList.remove('hidden');
+  spaceState = 'IDLE';
+});
+</script>
+</body>
+</html>
