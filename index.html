@@ -297,13 +297,13 @@ function finishEstimationExperiment() {
   const resultsContent = document.getElementById('results-content');
   
   const totalActual = trialResults.reduce((sum, r) => sum + r.actual, 0);
-  const totalDiff = trialResults.reduce((sum, r) => sum + r.diff, 0);
+  const totalAbsDiff = trialResults.reduce((sum, r) => sum + Math.abs(r.diff), 0);
   const avgActual = totalActual / trialResults.length;
-  const avgDiff = totalDiff / trialResults.length;
+  const avgAbsDiff = totalAbsDiff / trialResults.length;
 
   summaryMetrics = {
     avgActual: avgActual.toFixed(2),
-    avgDiff: (avgDiff > 0 ? '+' : '') + avgDiff.toFixed(2)
+    avgAbsDiff: avgAbsDiff.toFixed(2)
   };
 
   let rows = trialResults.map(r => `
@@ -331,7 +331,7 @@ function finishEstimationExperiment() {
         <tr>
           <td>Average</td>
           <td>${summaryMetrics.avgActual}s</td>
-          <td>${summaryMetrics.avgDiff}s</td>
+          <td>${summaryMetrics.avgAbsDiff}s (Abs Error)</td>
         </tr>
       </tfoot>
     </table>
@@ -359,8 +359,8 @@ document.getElementById('btn-copy-with-headers').addEventListener('click', (e) =
     values.push(r.actual.toFixed(2), (r.diff > 0 ? '+' : '') + r.diff.toFixed(2));
   });
 
-  headers.push('Average Actual (s)', 'Average Diff (s)');
-  values.push(summaryMetrics.avgActual, summaryMetrics.avgDiff);
+  headers.push('Average Actual (s)', 'Average Abs Error (s)');
+  values.push(summaryMetrics.avgActual, summaryMetrics.avgAbsDiff);
 
   const textToCopy = `${headers.join('\t')}\n${values.join('\t')}`;
   copyToClipboard(textToCopy, e.target, 'Copy with Headers');
@@ -373,7 +373,7 @@ document.getElementById('btn-copy-data-only').addEventListener('click', (e) => {
     values.push(r.actual.toFixed(2), (r.diff > 0 ? '+' : '') + r.diff.toFixed(2));
   });
 
-  values.push(summaryMetrics.avgActual, summaryMetrics.avgDiff);
+  values.push(summaryMetrics.avgActual, summaryMetrics.avgAbsDiff);
 
   const textToCopy = values.join('\t');
   copyToClipboard(textToCopy, e.target, 'Copy Data Only');
