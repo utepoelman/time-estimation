@@ -100,6 +100,8 @@
     display: flex;
     gap: 15px;
     margin-top: 20px;
+    flex-wrap: wrap;
+    justify-content: center;
   }
 
   /* Results Table Styling */
@@ -116,6 +118,10 @@
   th {
     background-color: var(--button-bg);
   }
+  tfoot tr {
+    background-color: var(--button-bg);
+    font-weight: bold;
+  }
 </style>
 </head>
 <body>
@@ -127,7 +133,7 @@
   <div class="form-row">
     <div class="form-group">
       <label for="target-time">Target Time (seconds):</label>
-      <input type="number" id="target-time" value="20" min="1" step="0.5">
+      <input type="number" id="target-time" value="10" min="1" step="0.5">
     </div>
     <div class="form-group">
       <label for="est-trials">Number of Trials:</label>
@@ -151,8 +157,10 @@
 <!-- RESULTS STAGE -->
 <div id="results-stage" class="hidden">
   <h2>Results</h2>
-  <div id="results-content"></div>
+  <div id="results-content" style="width: 100%;"></div>
   <div class="button-group">
+    <button id="btn-copy-with-headers">Copy with Headers</button>
+    <button id="btn-copy-data-only">Copy Data Only</button>
     <button id="btn-next-participant">Next Participant</button>
     <button id="btn-modify-setup">Modify Setup</button>
   </div>
@@ -167,6 +175,7 @@ let currentTrial = 0;
 let totalTrials = 0;
 let estimationStartTime = 0;
 let trialResults = [];
+let summaryMetrics = {};
 
 const setupPanel = document.getElementById('setup-panel');
 const stageBox = document.getElementById('stage-box');
@@ -287,10 +296,19 @@ function finishEstimationExperiment() {
 
   const resultsContent = document.getElementById('results-content');
   
+  const totalActual = trialResults.reduce((sum, r) => sum + r.actual, 0);
+  const totalDiff = trialResults.reduce((sum, r) => sum + r.diff, 0);
+  const avgActual = totalActual / trialResults.length;
+  const avgDiff = totalDiff / trialResults.length;
+
+  summaryMetrics = {
+    avgActual: avgActual.toFixed(2),
+    avgDiff: (avgDiff > 0 ? '+' : '') + avgDiff.toFixed(2)
+  };
+
   let rows = trialResults.map(r => `
     <tr>
-      <td>${r.trial}</td>
-      <td>${r.target.toFixed(2)}s</td>
+      <td>Trial ${r.trial}</td>
       <td>${r.actual.toFixed(2)}s</td>
       <td>${r.diff > 0 ? '+' : ''}${r.diff.toFixed(2)}s</td>
     </tr>
@@ -302,7 +320,6 @@ function finishEstimationExperiment() {
       <thead>
         <tr>
           <th>Trial</th>
-          <th>Target</th>
           <th>Recorded Time</th>
           <th>Difference</th>
         </tr>
@@ -310,9 +327,57 @@ function finishEstimationExperiment() {
       <tbody>
         ${rows}
       </tbody>
+      <tfoot>
+        <tr>
+          <td>Average</td>
+          <td>${summaryMetrics.avgActual}s</td>
+          <td>${summaryMetrics.avgDiff}s</td>
+        </tr>
+      </tfoot>
     </table>
   `;
 }
+
+// Clipboard Functions
+function copyToClipboard(text, btnElement, originalLabel) {
+  navigator.clipboard.writeText(text).then(() => {
+    btnElement.textContent = 'Copied!';
+    setTimeout(() => {
+      btnElement.textContent = originalLabel;
+    }, 1500);
+  }).catch(() => {
+    alert('Failed to copy metrics to clipboard.');
+  });
+}
+
+document.getElementById('btn-copy-with-headers').addEventListener('click', (e) => {
+  let headers = ['Target Time (s)'];
+  let values = [experimentConfig.targetTime];
+
+  trialResults.forEach(r => {
+    headers.push(`T${r.trial} Actual (s)`, `T${r.trial} Diff (s)`);
+    values.push(r.actual.toFixed(2), (r.diff > 0 ? '+' : '') + r.diff.toFixed(2));
+  });
+
+  headers.push('Average Actual (s)', 'Average Diff (s)');
+  values.push(summaryMetrics.avgActual, summaryMetrics.avgDiff);
+
+  const textToCopy = `${headers.join('\t')}\n${values.join('\t')}`;
+  copyToClipboard(textToCopy, e.target, 'Copy with Headers');
+});
+
+document.getElementById('btn-copy-data-only').addEventListener('click', (e) => {
+  let values = [experimentConfig.targetTime];
+
+  trialResults.forEach(r => {
+    values.push(r.actual.toFixed(2), (r.diff > 0 ? '+' : '') + r.diff.toFixed(2));
+  });
+
+  values.push(summaryMetrics.avgActual, summaryMetrics.avgDiff);
+
+  const textToCopy = values.join('\t');
+  copyToClipboard(textToCopy, e.target, 'Copy Data Only');
+});
 
 // Reset Handlers
 document.getElementById('btn-next-participant').addEventListener('click', () => {
